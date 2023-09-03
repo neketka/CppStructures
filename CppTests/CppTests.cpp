@@ -50,7 +50,7 @@ public:
 	}
 
 	OrderId market_order(bool buy, double quantity) {
-		return _create_order(buy, buy ? best_offer() : best_bid(), quantity, false);
+		return _create_order(buy, -1.0, quantity, false);
 	}
 
 	Order get_order(OrderId order_id) {
@@ -61,10 +61,12 @@ public:
 		Order& order = m_orders[order_id];
 		order.quantity_left = 0;
 
-		auto& order_pair = *(order.buy ? m_bids : m_offers).find(order.avg_price);
-		order_pair.second.remove_if([=](OrderId id) { return id == order_id; });
+		if (order.asking_price == -1.0) return;
+
+		auto& order_pair = *(order.buy ? m_bids : m_offers).find(order.asking_price);
+		order_pair.second.remove(order_id);
 		if (order_pair.second.empty()) {
-			(order.buy ? m_bids : m_offers).erase(order.avg_price);
+			(order.buy ? m_bids : m_offers).erase(order.asking_price);
 		}
 	}
 private:
@@ -132,7 +134,7 @@ private:
 int main() {
 	Orderbook book;
 
-	book.limit_order(true, 100, 1000);
+	Orderbook::OrderId to_cancel = book.limit_order(true, 100, 1000);
 	book.limit_order(true, 100, 1000);
 	book.limit_order(true, 102, 1000);
 
@@ -140,9 +142,11 @@ int main() {
 	book.limit_order(false, 201, 600);
 	book.limit_order(false, 202, 500);
 	
-	Orderbook::OrderId orderId = book.market_order(false, 10000);
+	book.cancel_order(to_cancel);
+	
+	Orderbook::OrderId order_id = book.market_order(false, 10000);
 
-	Orderbook::Order order = book.get_order(orderId);
+	Orderbook::Order order = book.get_order(order_id);
 
 	std::cout << "Market price " << book.market_price() << std::endl;
 	std::cout << "Avg price filled " << order.avg_price << " quantity filled " << order.quantity_filled << " quantity left " << order.quantity_left << std::endl;
